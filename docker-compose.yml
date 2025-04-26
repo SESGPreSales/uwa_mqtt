@@ -1,0 +1,23 @@
+services:
+  nodered:
+    image: nodered/node-red
+    volumes:
+      - newmyNodeREDdata:/data
+    container_name: nodered
+    ports:
+      - 1880:1880
+  mqtt:
+    image: eclipse-mosquitto
+    container_name: mqtt
+    volumes:
+      - .\MQTTconfig:/mosquitto/config
+      - .\MQTTdata:/mosquitto/data
+      - .\MQTTlogs:/mosquitto/log
+    ports:
+      - 1883:1883
+
+volumes:
+  newmyNodeREDdata:
+  MQTTconfig:
+  MQTTdata:
+  MQTTlogs:
