@@ -1,1 +1,4 @@
 MQTTlogs/mosquitto.log
+node_modules
+ngrok.yml
+MQTTdata/mosquitto.db

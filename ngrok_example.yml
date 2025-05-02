@@ -1,0 +1,19 @@
+version: "2"
+# (optional) put your authtoken here so ngrok will pick it up automatically
+authtoken: YOURAUTHTOKEN_HERE
+
+tunnels:
+  mqtt:
+    proto: tcp
+    addr: mqtt:1883
+    # if you have a reserved TCP address, you can force the remote port to 1883:
+    # remote_addr: ":1883"
+
+  nodered:
+    proto: http
+    addr: nodered:1880
+    hostname: mutual-lively-pug.ngrok-free.app
+    host_header: rewrite
+    # bind_tls: true
+    # you can also set a custom subdomain:
+    # subdomain: mutual-lively-pug.ngrok-free.app
