@@ -1,21 +1,27 @@
-const mqtt = require("mqtt");
-const client = mqtt.connect("mqtt://mqtt");
+const mqtt = require('mqtt');
 
-const hostIP = process.env.HOST_LAN_IP;
-console.log("Host LAN IP is:", hostIP);
+const client = mqtt.connect('mqtt://mqtt');
+const hostIP = process.env.HOST_LAN_IP ?? '';
+let counter = 0
+client.on('connect', () => {
+  console.log('✅ Connected to MQTT broker!');
 
-// console.log(hostIP);
-
-client.on("connect", () => {
-	client.subscribe("presence", err => {
-		if (!err) {
-			client.publish("presence", hostIP);
-		}
-	});
+  // fire every 5s, no matter what
+  const timer = setInterval(() => {
+    counter++
+    console.log(`🔄 Publishing host IP: ${hostIP}, counter = ${counter}`);
+    counter == 5 ? clearInterval(timer) : null
+    client.publish(
+      'presence',
+      hostIP,            // same payload each time
+      { qos: 1 },        // ensure the broker actually delivers every message
+      err => {
+        if (err) console.error('Publish error:', err);
+      }
+    );
+  }, 30000);
 });
 
-client.on("message", (topic, message) => {
-	// message is Buffer
-	console.log(message.toString());
-	client.end();
+client.on('error', err => {
+  console.error('MQTT Error:', err);
 });
