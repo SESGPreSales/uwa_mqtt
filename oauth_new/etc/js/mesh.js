@@ -42,11 +42,15 @@ async function fetchStatus(device) {
 	const status = await response.json();
 
 	return {
-		name: device.name,
-		id: device.id,
-		lightness: Math.round((status.state.lightness / 65536) * 100),
-		temperature: status.state.temperature,
-		power: status.state.power,
+		displayName: device.name,
+		externalId: device.id,
+		handlerType: status.abstraction,
+		states: {
+			brightness: Math.round((status.state.lightness / 65536) * 100),
+			online: true,
+			temperature: status.state.temperature,
+			switch: status.state.power === false ? "off" : "on",
+		},
 	};
 }
 
@@ -55,12 +59,24 @@ async function updateDeviceStatus(device) {
 		const status = await fetchStatus(device);
 
 		//map status inside device
-		console.log(device);
+		// console.log(device);
 		console.log(status);
 
 		loadedDevices.set(device.id, status);
 	} catch (err) {
-		loadedDevices.set(device.id, err);
+		const dev = {
+			displayName: device.name,
+			externalId: device.id,
+			handlerType: device.abstraction,
+			states: {
+				brightness: 0,
+				online: false,
+				temperature: 0,
+				switch: "off",
+			},
+		};
+
+		loadedDevices.set(device.id, dev);
 		// console.warn(`Retrying ${device.name}: ${err.message}`);
 	}
 }
