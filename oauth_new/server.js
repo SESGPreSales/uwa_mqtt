@@ -88,5 +88,6 @@ console.log(`Refresh Token URL: ${process.env.SERVER_URL}/oauth/token\n`);
 refreshLoop().then(r => {
 	const deviceList = Array.from(r.values());
 	console.log(`Number of Devices in deviceList is : ${deviceList.length}`);
+	// console.log(`first one is : ${r}`);
 });
 app.listen(port);

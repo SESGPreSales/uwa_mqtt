@@ -35,7 +35,10 @@ async function fetchStatus(device) {
 		},
 	});
 
-	if (!response.ok) throw new Error(`Status fetch failed: ${response.status}`);
+	if (!response.ok)
+		throw new Error(
+			`Status fetch failed: ${response.statusText} - ${response.status}`
+		);
 	const status = await response.json();
 
 	return {
@@ -50,37 +53,6 @@ async function fetchStatus(device) {
 async function updateDeviceStatus(device) {
 	try {
 		const status = await fetchStatus(device);
-		// const groupName = getGroupName(status.name);
-		// 	const container = document.getElementById("deviceContainer");
-
-		// 	let groupBox = document.getElementById(`group-${groupName}`);
-		// 	if (!groupBox) {
-		// 		groupBox = document.createElement("div");
-		// 		groupBox.id = `group-${groupName}`;
-		// 		groupBox.style.border = "1px solid #faaf19";
-		// 		groupBox.style.marginBottom = "20px";
-		// 		groupBox.style.padding = "10px";
-		// 		groupBox.style.borderRadius = "10px";
-		// 		groupBox.style.boxShadow = "0 0 8px #faaf19";
-		// 		groupBox.innerHTML = `<h2 style="color:#faaf19">${groupName}</h2>`;
-		// 		container.appendChild(groupBox);
-		// 	}
-
-		// 	let row = document.getElementById(`row-${status.id}`);
-		// 	if (!row) {
-		// 		row = document.createElement("div");
-		// 		row.id = `row-${status.id}`;
-		// 		row.style.marginBottom = "5px";
-		// 		row.style.padding = "5px";
-		// 		row.style.borderRadius = "5px";
-		// 		groupBox.appendChild(row);
-		// 	}
-
-		// 	row.className = status.power ? "on" : "off";
-		// 	row.innerHTML = `
-		//     <strong>${status.name}</strong> —
-		//     ${status.lightness}% | ${status.temperature}K
-		//   `;
 
 		//map status inside device
 		console.log(device);
@@ -88,13 +60,14 @@ async function updateDeviceStatus(device) {
 
 		loadedDevices.set(device.id, status);
 	} catch (err) {
-		console.warn(`Retrying ${device.name}: ${err.message}`);
+		loadedDevices.set(device.id, err);
+		// console.warn(`Retrying ${device.name}: ${err.message}`);
 	}
 }
 
 async function refreshLoop() {
 	try {
-		console.log("Starting refresh loop...", NETWORK_ID);
+		console.log("Starting refresh loop...");
 
 		if (loadedDevices.size === 0) {
 			// console.log("Fetching devices...");
@@ -112,12 +85,13 @@ async function refreshLoop() {
 			updateDeviceStatus(device);
 			await new Promise(r => setTimeout(r, 300));
 		}
+
 		console.log("Finished loop, returning loadedDevices...");
 		return loadedDevices;
 	} catch (err) {
 		console.error("Error in refresh loop:", err.message);
 	} finally {
-		// setTimeout(refreshLoop, 5000);
+		// setTimeout(refreshLoop, 15000);
 	}
 }
 
