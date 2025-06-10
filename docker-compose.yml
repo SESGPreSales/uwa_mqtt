@@ -3,28 +3,34 @@ services:
     image: nodered/node-red
     volumes:
       - newmyNodeREDdata:/data
-    container_name: nodered
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - 1880:1880
-  nodeapp:
-    build: nodeapp/.
-    # extra_hosts:
-    #   - "host.docker.internal:host-gateway"
-    environment:
-      - HOST_LAN_IP=${HOST_LAN_IP}
-    ports:
-      - 8000
+  # nodeapp:
+  #   build: nodeapp/.
+  #   # extra_hosts:
+  #   #   - "host.docker.internal:host-gateway"
+  #   environment:
+  #     - HOST_LAN_IP=${HOST_LAN_IP}
+  #   ports:
+  #     - 8000
   mqtt:
     image: eclipse-mosquitto
-    container_name: mqtt
     volumes:
       - .\MQTTconfig:/mosquitto/config
       - .\MQTTdata:/mosquitto/data
       - .\MQTTlogs:/mosquitto/log
     ports:
       - 1883:1883
+  oauth:
+    build: oauth_new/.
+    restart: unless-stopped
+    volumes:
+      - .\oauth_new\etc\js:/usr/src/app/etc/js
+      - .\oauth_new\server.js:/usr/src/app/server.js
+    ports:
+      - 3000
   ngrok:
     image: ngrok/ngrok:latest
     restart: unless-stopped
