@@ -27,9 +27,12 @@ services:
     build: oauth_new/.
     restart: unless-stopped
     volumes:
-      - .\oauth_new\etc\js:/usr/src/app/etc/js
+      - .\oauth_new\etc:/usr/src/app/etc
       - .\oauth_new\server.js:/usr/src/app/server.js
-    ports:
+      - .\oauth_new\lib:/usr/src/app/lib
+      - .\oauth_new\public:/usr/src/app/public
+      - .\oauth_new\routes:/usr/src/app/routes
+      - .\oauth_new\views:/usr/src/app/views
       - 3000
   ngrok:
     image: ngrok/ngrok:latest
