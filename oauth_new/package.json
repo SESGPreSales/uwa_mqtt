@@ -6,6 +6,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@smartthings/smartapp": "^4.3.5",
     "@ngrok/ngrok": "^1.5.1",
     "aws-sdk": "^2.1434.0",
     "axios": "^1.9.0",

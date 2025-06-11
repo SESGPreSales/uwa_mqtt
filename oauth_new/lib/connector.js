@@ -1,5 +1,5 @@
 "use strict";
-const { refreshLoop, loadedDevices } = require("./etc/js/mesh");
+const { refreshLoop, loadedDevices } = require("../etc/js/mesh");
 const db = require("./db");
 const mapping = require("./mapping");
 const deviceService = require("./device-service");
