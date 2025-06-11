@@ -1,120 +1,156 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const db = require('../lib/db');
-const deviceService = require('../lib/device-service');
-const mapping = require('../lib/mapping');
-const {DiscoveryDevice} = require("st-schema");
+const deviceService = require("../lib/device-service");
+const mapping = require("../lib/mapping");
+const { DiscoveryDevice } = require("st-schema");
+const { refreshLoop, loadedDevices } = require("../etc/js/mesh");
+
 /**
  * Primary devices page
  */
-router.get('/', async (req, res) => {
-  if (req.session.username) {
-    res.render('devices/index', {
-      redirectButton: req.session.oauth
-    });
-  }
-  else {
-    res.redirect('/authorize')
-  }
+router.get("/", async (req, res) => {
+	if (req.session.username) {
+		res.render("devices/index", {
+			redirectButton: req.session.oauth,
+		});
+	} else {
+		res.redirect("/authorize");
+	}
 });
 
 /**
  * Returns view model data for the devices page
  */
-router.get('/viewData', async (req, res) => {
-  const devices = req.session.username ? (await db.getDevices(req.session.username)) : [];
-  res.send({
-    username: req.session.username,
-    devices: devices,
-    deviceTypes: mapping.deviceTypeNames()
-  })
+router.get("/viewData", async (req, res) => {
+	const devices = req.session.username
+		? Array.from(loadedDevices.values())
+		: [];
+	res.send({
+		username: req.session.username,
+		devices: devices,
+		deviceTypes: mapping.deviceTypeNames(),
+	});
 });
 
 /**
- * Handles device commands from devices page
+ * Handles device commands from devices page (updates memory only)
  */
-router.post('/command', async(req, res) => {
-  const params = req.body;
-  const externalStates = params.states;
-  if ('temperatureScale' in externalStates) {
-    const allStates = (await db.getDevice(params.username, params.externalId)).states;
-    if (allStates.temperatureScale !== externalStates.temperatureScale) {
-      const newStates = {temperatureScale: externalStates.temperatureScale}
-      for (const name of Object.keys(allStates)) {
-        if (mapping.isTemperatureAttribute(name)) {
-          newStates[name] = convertTemperature(allStates[name], allStates.temperatureScale || 'F', externalStates.temperatureScale)
-        }
-      }
-      await db.updateDeviceState(params.username, params.externalId, newStates);
-      await deviceService.updateProactiveState(params.username, params.externalId, newStates);
-    } else {
-      await db.updateDeviceState(params.username, params.externalId, externalStates);
-    }
-  } else {
-    await db.updateDeviceState(params.username, params.externalId, externalStates);
-    await deviceService.updateProactiveState(params.username, params.externalId, externalStates);
-  }
-  res.send({})
+router.post("/command", async (req, res) => {
+	const { username, externalId, states: externalStates } = req.body;
+	const device = Array.from(loadedDevices.values()).find(
+		d => d.externalId === externalId
+	);
+
+	if (!device) {
+		return res.status(404).send({ error: "Device not found" });
+	}
+
+	const allStates = device.states || {};
+
+	if ("temperatureScale" in externalStates) {
+		if (allStates.temperatureScale !== externalStates.temperatureScale) {
+			const newStates = { temperatureScale: externalStates.temperatureScale };
+
+			for (const name of Object.keys(allStates)) {
+				if (mapping.isTemperatureAttribute(name)) {
+					newStates[name] = convertTemperature(
+						allStates[name],
+						allStates.temperatureScale || "F",
+						externalStates.temperatureScale
+					);
+				}
+			}
+
+			device.states = { ...allStates, ...newStates };
+			await deviceService.updateProactiveState(username, externalId, newStates);
+		} else {
+			device.states = { ...allStates, ...externalStates };
+		}
+	} else {
+		device.states = { ...allStates, ...externalStates };
+		await deviceService.updateProactiveState(
+			username,
+			externalId,
+			externalStates
+		);
+	}
+
+	res.send({});
 });
 
 /**
- * Handles device creation requests from devices page
+ * Handles device creation requests from devices page (adds to memory)
  */
-router.post('/create', async(req, res) => {
-  const deviceType = mapping.deviceTypeForName(req.body.deviceType);
-  const device = await db.addDevice(req.session.username, deviceType.type, req.body.displayName || deviceType.name, deviceType.states);
-  const discoveryDevice = new DiscoveryDevice(device.externalId, device.displayName, device.handlerType)
-    .manufacturerName('Example ST Schema Connector')
-    .modelName(device.handlerType);
-  deviceService.addDevice(req.session.username, discoveryDevice)
-  res.send(device)
+router.post("/create", async (req, res) => {
+	const deviceType = mapping.deviceTypeForName(req.body.deviceType);
+
+	const externalId = `mem-${Date.now()}`;
+	const newDevice = {
+		id: externalId, // Optional internal ID
+		externalId,
+		displayName: req.body.displayName || deviceType.name,
+		handlerType: deviceType.type,
+		states: { ...deviceType.states },
+	};
+
+	loadedDevices.set(externalId, newDevice);
+
+	const discoveryDevice = new DiscoveryDevice(
+		newDevice.externalId,
+		newDevice.displayName,
+		newDevice.handlerType
+	)
+		.manufacturerName("Example ST Schema Connector")
+		.modelName(newDevice.handlerType);
+
+	deviceService.addDevice(req.session.username, discoveryDevice);
+	res.send(newDevice);
 });
 
 /**
- * Handles device deletion requests from devices page
+ * Handles device deletion requests from devices page (removes from memory)
  */
-router.post('/delete', async(req, res) => {
-  const deviceIds = req.body.deviceIds;
-  const ops = deviceIds.map(id => {
-    return db.deleteDevice(req.session.username, id)
-  });
-  await Promise.all(ops);
-  res.send({count: deviceIds.length, items: deviceIds})
+router.post("/delete", async (req, res) => {
+	const deviceIds = req.body.deviceIds;
+	const removed = [];
+
+	for (const id of deviceIds) {
+		const foundKey =
+			Array.from(loadedDevices.values()).find(d => d.externalId === id)?.id ||
+			id;
+		if (loadedDevices.delete(foundKey)) {
+			removed.push(id);
+		}
+	}
+
+	res.send({ count: removed.length, items: removed });
 });
 
 /**
  * Opens SSE stream to devices page
  */
-router.get('/stream', async(req, res, next) => {
-  res.flush = () => {};
-  next();
-}, deviceService.sse.init);
+router.get(
+	"/stream",
+	async (req, res, next) => {
+		res.flush = () => {};
+		next();
+	},
+	deviceService.sse.init
+);
 
 module.exports = router;
 
 function convertTemperature(temperature, fromUnit, toUnit) {
-  if (fromUnit === toUnit) {
-    return temperature;
-  }
-  if (toUnit === 'C') {
-    // Convert F to C, in half degrees
-    return Math.round(10 * (temperature - 32) / 9) / 2
-  }
-  // Convert C to F, in full degrees
-  return Math.round((9 * temperature / 5) + 32)
+	if (fromUnit === toUnit) return temperature;
+	if (toUnit === "C") return Math.round((10 * (temperature - 32)) / 9) / 2;
+	return Math.round((9 * temperature) / 5 + 32);
 }
 
 function injectTemperatureScale(devices) {
-  for (const device of devices) {
-    if (mapping.missingTemperatureScale(device.states)) {
-      device.states.temperatureScale = 'F';
-    }
-  }
-  return devices;
+	for (const device of devices) {
+		if (mapping.missingTemperatureScale(device.states)) {
+			device.states.temperatureScale = "F";
+		}
+	}
+	return devices;
 }
-
-
-
-
-
-

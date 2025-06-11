@@ -60,6 +60,7 @@ async function updateDeviceStatus(device) {
 
 		//map status inside device
 		// console.log(device);
+
 		console.log(status);
 
 		loadedDevices.set(device.id, status);
@@ -94,7 +95,7 @@ async function refreshLoop() {
 
 		const deviceList = Array.from(loadedDevices.values());
 
-		console.log(`Number of fetched Devices is : ${deviceList.length}`);
+		console.log(`Number of Devices in loadedDevices is : ${deviceList.length}`);
 
 		for (const device of deviceList) {
 			// console.log(`Updating device ${device.id}`);
@@ -103,11 +104,13 @@ async function refreshLoop() {
 		}
 
 		console.log("Finished loop, returning loadedDevices...");
+		console.log(deviceList);
+
 		return loadedDevices;
 	} catch (err) {
 		console.error("Error in refresh loop:", err.message);
 	} finally {
-		// setTimeout(refreshLoop, 15000);
+		setTimeout(refreshLoop, 10000);
 	}
 }
 

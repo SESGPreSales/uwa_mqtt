@@ -89,8 +89,8 @@ refreshLoop().then(r => {
 	const deviceList = Array.from(r.values());
 	console.log(`Number of Devices in deviceList is : ${deviceList.length}`);
 	// console.log(`first one is : ${r}`);
-	if (deviceList.length > 0) {
-		console.log("First value:", r.values().next().value);
-	}
+	// if (deviceList.length > 0) {
+	// 	console.log("First value:", r.values().next().value);
+	// }
 });
 app.listen(port);

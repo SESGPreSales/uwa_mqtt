@@ -1,6 +1,5 @@
 "use strict";
-const { refreshLoop, loadedDevices } = require("./etc/js/mesh");
-const db = require("./db");
+const { refreshLoop, loadedDevices } = require("../etc/js/mesh");
 const mapping = require("./mapping");
 const deviceService = require("./device-service");
 const deviceTypes = require("./device-types");
@@ -10,28 +9,17 @@ const {
 	GlobalErrorTypes,
 } = require("st-schema");
 
-/**
- * ST Schema Connector
- */
 const clientId = process.env.ST_CLIENT_ID;
 const clientSecret = process.env.ST_CLIENT_SECRET;
+
 const connector = new SchemaConnector()
 	.clientId(clientId)
 	.clientSecret(clientSecret)
 	.enableEventLogging()
 
-	// .discoveryHandler(async (accessToken, response) => {
-	//   for (const device of (await db.getDevicesForToken(accessToken))) {
-	//     const d = response.addDevice(device.externalId, device.displayName, mapping.handlerType(device.handlerType));
-	//     d.manufacturerName('STS');
-	//     d.modelName(device.handlerType);
-	//     if (deviceTypes[device.handlerType].deviceCategory) {
-	//       d.addCategory(deviceTypes[device.handlerType].deviceCategory)
-	//     }
-	//   }
-	// })
+	// DISCOVERY HANDLER
 	.discoveryHandler(async (accessToken, response) => {
-		for (const device of loadedDevices) {
+		for (const device of loadedDevices.values()) {
 			const d = response.addDevice(
 				device.externalId,
 				device.displayName,
@@ -39,17 +27,16 @@ const connector = new SchemaConnector()
 			);
 			d.manufacturerName("STS");
 			d.modelName(device.handlerType);
-			if (deviceTypes[device.handlerType].deviceCategory) {
+			if (deviceTypes[device.handlerType]?.deviceCategory) {
 				d.addCategory(deviceTypes[device.handlerType].deviceCategory);
 			}
 		}
 	})
 
+	// STATE REFRESH HANDLER
 	.stateRefreshHandler(async (accessToken, response, data) => {
-		const externalDeviceIds = data.devices.map(it => {
-			return it.externalDeviceId;
-		});
-		for (const device of await db.getDevicesForToken(accessToken)) {
+		const externalDeviceIds = data.devices.map(d => d.externalDeviceId);
+		for (const device of loadedDevices.values()) {
 			if (externalDeviceIds.includes(device.externalId)) {
 				response.addDevice(
 					device.externalId,
@@ -59,63 +46,58 @@ const connector = new SchemaConnector()
 		}
 	})
 
+	// COMMAND HANDLER
 	.commandHandler(async (accessToken, response, devices) => {
-		const account = await db.getAccountForToken(accessToken);
-		if (account) {
-			const ops = devices.map(
-				async ({ externalDeviceId, deviceCookie, commands }) => {
-					const externalDevice = await db.getDevice(
-						account.username,
-						externalDeviceId
-					);
-					if (externalDevice) {
-						const externalStates = mapping.externalStatesFor(commands);
-						const stStates = mapping.stStatesFor(
-							externalStates,
-							externalDevice.states
-						);
-						response.addDevice(externalDeviceId, stStates, deviceCookie);
+		const ops = devices.map(
+			async ({ externalDeviceId, deviceCookie, commands }) => {
+				const externalDevice = Array.from(loadedDevices.values()).find(
+					d => d.externalId === externalDeviceId
+				);
 
-						deviceService.updateProactiveState(
-							account.username,
-							externalDeviceId,
-							externalStates,
-							accessToken
-						);
-						return db.updateDeviceState(
-							account.username,
-							externalDeviceId,
-							externalStates
-						);
-					} else {
-						response
-							.addDevice(externalDeviceId, [], deviceCookie)
-							.setError("Device not found", DeviceErrorTypes.DEVICE_DELETED);
-					}
+				if (externalDevice) {
+					const externalStates = mapping.externalStatesFor(commands);
+					const stStates = mapping.stStatesFor(
+						externalStates,
+						externalDevice.states
+					);
+
+					response.addDevice(externalDeviceId, stStates, deviceCookie);
+
+					deviceService.updateProactiveState(
+						"local", // placeholder username if needed
+						externalDeviceId,
+						externalStates,
+						accessToken
+					);
+
+					// If you want to update `loadedDevices` state in-memory:
+					externalDevice.states = {
+						...externalDevice.states,
+						...externalStates,
+					};
+				} else {
+					response
+						.addDevice(externalDeviceId, [], deviceCookie)
+						.setError("Device not found", DeviceErrorTypes.DEVICE_DELETED);
 				}
-			);
-			await Promise.all(ops);
-		} else {
-			response.setError(
-				"Integration deleted",
-				GlobalErrorTypes.INTEGRATION_DELETED
-			);
-		}
+			}
+		);
+
+		await Promise.all(ops);
 	})
 
+	// CALLBACK HANDLER — Now a no-op or console.log
 	.callbackAccessHandler(
 		async (accessToken, callbackAuthentication, callbackUrls) => {
-			await db.setCallbackInfo(
-				accessToken,
-				callbackAuthentication,
-				callbackUrls
-			);
-			console.log("CALLBACK ACCESS GRANTED");
+			console.log("Callback info received but not persisted.");
+			// Optionally store in memory or skip entirely
 		}
 	)
 
+	// INTEGRATION DELETED HANDLER — Also a no-op
 	.integrationDeletedHandler(async accessToken => {
-		await db.removeToken(accessToken);
+		console.log("Integration deleted for token:", accessToken);
+		// Optionally clear memory cache or ignore
 	});
 
 module.exports = connector;
