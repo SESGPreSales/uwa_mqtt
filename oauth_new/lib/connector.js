@@ -86,18 +86,18 @@ const connector = new SchemaConnector()
 		await Promise.all(ops);
 	})
 
-	// CALLBACK HANDLER — Now a no-op or console.log
-	.callbackAccessHandler(
-		async (accessToken, callbackAuthentication, callbackUrls) => {
-			console.log("Callback info received but not persisted.");
-			// Optionally store in memory or skip entirely
-		}
-	)
+	.callbackAccessHandler(async (accessToken, callbackAuth, callbackUrls) => {
+		deviceService.registerCallback("some-username", {
+			access_token: accessToken,
+			callbackAuth,
+			callbackUrls,
+		});
+		console.log("CALLBACK ACCESS GRANTED");
+	})
 
-	// INTEGRATION DELETED HANDLER — Also a no-op
 	.integrationDeletedHandler(async accessToken => {
-		console.log("Integration deleted for token:", accessToken);
-		// Optionally clear memory cache or ignore
+		deviceService.clearCallbacks("some-username");
+		console.log("INTEGRATION DELETED");
 	});
 
 module.exports = connector;
